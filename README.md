@@ -6,10 +6,10 @@ The source is version-neutral across the classic monolithic Openness API used by
 
 ## Supported TIA Portal versions
 
-- **V15.1 through V20:** supported by this codebase.
-- **V21:** not currently supported. V21 replaces the previous monolithic `Siemens.Engineering.dll` / `Siemens.Engineering.Hmi.dll` model with modular Openness assemblies, so it requires a separate adapter/migration.
+- **V15.1 through V20:** supported through the classic monolithic `Siemens.Engineering.dll` / `Siemens.Engineering.Hmi.dll` API.
+- **V21:** supported as a separate V21 build using the modular `Siemens.Engineering.Base.dll`, `Siemens.Engineering.WinCC.dll`, and `Siemens.Engineering.WinCC.Extension.dll` assemblies.
 
-Siemens preserves older Openness APIs in several later TIA releases. That allows one build to work with more than one installed engineering version when the referenced API is present. The application reads the installed Openness versions from the Siemens registry entries and only offers compatible versions at startup.
+Siemens preserves older Openness APIs in several later pre-V21 TIA releases. That allows one classic build to work with more than one installed engineering version when the referenced API is present. V21 is an API/assembly boundary: a V21 build is intended for V21, while pre-V21 builds use the legacy assembly family.
 
 ## Requirements
 
@@ -31,6 +31,12 @@ The default compile-time API is V15.1. To build against another installed Openne
 msbuild SiemensTiaOpenness.sln /p:Configuration=Release /p:TiaPortalVersion=V17
 ```
 
+TIA Portal V21 uses its modular net48 assemblies automatically:
+
+```bat
+msbuild SiemensTiaOpenness.sln /p:Configuration=Release /p:TiaPortalVersion=V21
+```
+
 If the API DLL comes from a newer installed TIA version, also set `TiaPortalInstallVersion`. For example, TIA Portal V20 can provide its retained V17 API:
 
 ```bat
@@ -47,13 +53,13 @@ The build fails with a clear message if the requested `Siemens.Engineering.dll` 
 
 ### Runtime version selection
 
-At startup the program reads:
+At startup the program reads the Siemens Openness registry tree:
 
 ```text
 HKEY_LOCAL_MACHINE\SOFTWARE\Siemens\Automation\Openness
 ```
 
-and identifies installed TIA Portal versions that contain the API version referenced by the build.
+The registry uses technical version keys such as `20.0` and API-version subkeys such as `20.0.0.0`. The program converts those to user-facing labels such as `V20` and identifies installations that contain the exact API assembly version referenced by the build.
 
 - One compatible version: it is selected automatically.
 - Multiple compatible versions: the application prompts you to choose one.
@@ -163,7 +169,7 @@ For that reason, Complete HMI import uses dependency order rather than alphabeti
 ## Important limitations
 
 - This tool targets classic WinCC HMI (`Siemens.Engineering.Hmi.HmiTarget`), not WinCC Unified.
-- TIA Portal V21 is not yet supported because its Openness assembly architecture is incompatible with the V15.1-V20 model.
+- Pre-V21 and V21 builds use different Siemens assembly families and are not interchangeable at runtime.
 - Screen imports require a compatible HMI device type and valid screen dimensions/numbers.
 - Integrated HMI connections are not exportable through this classic connection export mechanism.
 - Complete HMI import is safest as a round trip into the same project/device family. Cross-project imports can still depend on external PLC objects, libraries, authorization configuration, styles, or project-level resources that are not represented by individual HMI XML files.
