@@ -12,7 +12,7 @@
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>false</AutoGenerateBindingRedirects>
 
-    <!-- API version used at compile time. Override with /p:TiaPortalVersion=V17, V18, V19, or V20. -->
+    <!-- Openness API used at compile time. -->
     <TiaPortalVersion Condition="'$(TiaPortalVersion)' == ''">V15.1</TiaPortalVersion>
 
     <!-- Installed TIA version that supplies the compile-time API DLLs. It may be newer than TiaPortalVersion. -->
@@ -21,7 +21,8 @@
     <ProgramFiles64 Condition="'$(ProgramW6432)' != ''">$(ProgramW6432)</ProgramFiles64>
     <ProgramFiles64 Condition="'$(ProgramFiles64)' == ''">$(ProgramFiles)</ProgramFiles64>
     <TiaPortalInstallRoot Condition="'$(TiaPortalInstallRoot)' == ''">$(ProgramFiles64)\Siemens\Automation\Portal $(TiaPortalFolderVersion)</TiaPortalInstallRoot>
-    <TiaPublicApiDir Condition="'$(TiaPublicApiDir)' == ''">$(TiaPortalInstallRoot)\PublicAPI\$(TiaPortalVersion)</TiaPublicApiDir>
+    <TiaPublicApiDir Condition="'$(TiaPublicApiDir)' == '' and '$(TiaPortalVersion)' != 'V21'">$(TiaPortalInstallRoot)\PublicAPI\$(TiaPortalVersion)</TiaPublicApiDir>
+    <TiaPublicApiDir Condition="'$(TiaPublicApiDir)' == '' and '$(TiaPortalVersion)' == 'V21'">$(TiaPortalInstallRoot)\PublicAPI\V21\net48</TiaPublicApiDir>
   </PropertyGroup>
 
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
@@ -51,6 +52,9 @@
     <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="Microsoft.CSharp" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TiaPortalVersion)' != 'V21'">
     <Reference Include="Siemens.Engineering">
       <HintPath>$(TiaPublicApiDir)\Siemens.Engineering.dll</HintPath>
       <Private>False</Private>
@@ -58,6 +62,24 @@
     </Reference>
     <Reference Include="Siemens.Engineering.Hmi">
       <HintPath>$(TiaPublicApiDir)\Siemens.Engineering.Hmi.dll</HintPath>
+      <Private>False</Private>
+      <SpecificVersion>False</SpecificVersion>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TiaPortalVersion)' == 'V21'">
+    <Reference Include="Siemens.Engineering.Base">
+      <HintPath>$(TiaPublicApiDir)\Siemens.Engineering.Base.dll</HintPath>
+      <Private>False</Private>
+      <SpecificVersion>False</SpecificVersion>
+    </Reference>
+    <Reference Include="Siemens.Engineering.WinCC">
+      <HintPath>$(TiaPublicApiDir)\Siemens.Engineering.WinCC.dll</HintPath>
+      <Private>False</Private>
+      <SpecificVersion>False</SpecificVersion>
+    </Reference>
+    <Reference Include="Siemens.Engineering.WinCC.Extension">
+      <HintPath>$(TiaPublicApiDir)\Siemens.Engineering.WinCC.Extension.dll</HintPath>
       <Private>False</Private>
       <SpecificVersion>False</SpecificVersion>
     </Reference>
@@ -74,9 +96,11 @@
   </ItemGroup>
 
   <Target Name="ValidateTiaPortalReferences" BeforeTargets="ResolveReferences">
-    <Error Condition="'$(TiaPortalVersion)' == 'V21'" Text="TIA Portal V21 uses the new modular Openness assemblies and is not compatible with the V15.1-V20 Siemens.Engineering.dll object model used by this project." />
-    <Error Condition="!Exists('$(TiaPublicApiDir)\Siemens.Engineering.dll')" Text="Siemens.Engineering.dll was not found in $(TiaPublicApiDir). Set TiaPortalVersion/TiaPortalInstallVersion or override TiaPublicApiDir." />
-    <Error Condition="!Exists('$(TiaPublicApiDir)\Siemens.Engineering.Hmi.dll')" Text="Siemens.Engineering.Hmi.dll was not found in $(TiaPublicApiDir). Set TiaPortalVersion/TiaPortalInstallVersion or override TiaPublicApiDir." />
+    <Error Condition="'$(TiaPortalVersion)' != 'V21' and !Exists('$(TiaPublicApiDir)\Siemens.Engineering.dll')" Text="Siemens.Engineering.dll was not found in $(TiaPublicApiDir). Set TiaPortalVersion/TiaPortalInstallVersion or override TiaPublicApiDir." />
+    <Error Condition="'$(TiaPortalVersion)' != 'V21' and !Exists('$(TiaPublicApiDir)\Siemens.Engineering.Hmi.dll')" Text="Siemens.Engineering.Hmi.dll was not found in $(TiaPublicApiDir). Set TiaPortalVersion/TiaPortalInstallVersion or override TiaPublicApiDir." />
+    <Error Condition="'$(TiaPortalVersion)' == 'V21' and !Exists('$(TiaPublicApiDir)\Siemens.Engineering.Base.dll')" Text="Siemens.Engineering.Base.dll was not found in $(TiaPublicApiDir). TIA Portal V21 requires the modular net48 Openness assemblies." />
+    <Error Condition="'$(TiaPortalVersion)' == 'V21' and !Exists('$(TiaPublicApiDir)\Siemens.Engineering.WinCC.dll')" Text="Siemens.Engineering.WinCC.dll was not found in $(TiaPublicApiDir). Install the WinCC Basic/Comfort/Advanced components required by this tool." />
+    <Error Condition="'$(TiaPortalVersion)' == 'V21' and !Exists('$(TiaPublicApiDir)\Siemens.Engineering.WinCC.Extension.dll')" Text="Siemens.Engineering.WinCC.Extension.dll was not found in $(TiaPublicApiDir). Install the WinCC Basic/Comfort/Advanced components required by this tool." />
   </Target>
 
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
