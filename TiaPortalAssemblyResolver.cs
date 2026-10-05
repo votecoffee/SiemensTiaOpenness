@@ -10,23 +10,21 @@ namespace SiemensTiaOpenness
     internal static class TiaPortalAssemblyResolver
     {
         private const string OpennessRegistryPath = @"SOFTWARE\Siemens\Automation\Openness";
-        private const string EngineeringAssemblyName = "Siemens.Engineering";
+        private const string LegacyBaseAssemblyName = "Siemens.Engineering";
+        private const string V21BaseAssemblyName = "Siemens.Engineering.Base";
 
-        private static string _selectedEngineeringVersion;
+        private static CompatibleInstallation _selectedInstallation;
 
         public static string SelectedEngineeringVersion
         {
-            get { return _selectedEngineeringVersion; }
+            get { return _selectedInstallation == null ? null : _selectedInstallation.DisplayVersion; }
         }
 
         public static string ReferencedApiVersion
         {
             get
             {
-                AssemblyName reference = Assembly.GetExecutingAssembly()
-                    .GetReferencedAssemblies()
-                    .FirstOrDefault(a => string.Equals(a.Name, EngineeringAssemblyName, StringComparison.OrdinalIgnoreCase));
-
+                AssemblyName reference = GetReferencedBaseAssembly();
                 return reference == null || reference.Version == null
                     ? null
                     : reference.Version.ToString();
@@ -35,13 +33,9 @@ namespace SiemensTiaOpenness
 
         public static IList<string> GetCompatibleEngineeringVersions()
         {
-            string apiVersion = ReferencedApiVersion;
-            if (string.IsNullOrEmpty(apiVersion))
-                return new List<string>();
-
-            return GetInstalledEngineeringVersions()
-                .Where(version => HasApiVersion(version, apiVersion))
-                .OrderByDescending(ParseEngineeringVersion)
+            return FindCompatibleInstallations()
+                .OrderByDescending(item => ParseVersion(item.RegistryVersion))
+                .Select(item => item.DisplayVersion)
                 .ToList();
         }
 
@@ -50,33 +44,55 @@ namespace SiemensTiaOpenness
             if (string.IsNullOrWhiteSpace(engineeringVersion))
                 throw new ArgumentException("A TIA Portal engineering version must be selected.", "engineeringVersion");
 
-            _selectedEngineeringVersion = engineeringVersion;
+            CompatibleInstallation selected = FindCompatibleInstallations()
+                .FirstOrDefault(item => string.Equals(
+                    item.DisplayVersion,
+                    NormalizeDisplayVersion(engineeringVersion),
+                    StringComparison.OrdinalIgnoreCase));
+
+            if (selected == null)
+                throw new InvalidOperationException("The selected TIA Portal version does not provide the Openness API required by this build.");
+
+            _selectedInstallation = selected;
             AppDomain.CurrentDomain.AssemblyResolve += ResolveSiemensEngineeringAssembly;
         }
 
         private static Assembly ResolveSiemensEngineeringAssembly(object sender, ResolveEventArgs args)
         {
+            if (_selectedInstallation == null)
+                return null;
+
             var requested = new AssemblyName(args.Name);
             if (requested.Name == null ||
-                !requested.Name.StartsWith(EngineeringAssemblyName, StringComparison.OrdinalIgnoreCase))
+                !requested.Name.StartsWith("Siemens.Engineering", StringComparison.OrdinalIgnoreCase))
             {
                 return null;
             }
 
-            string requestedVersion = requested.Version == null ? null : requested.Version.ToString();
-            if (string.IsNullOrEmpty(requestedVersion))
+            string path = Path.Combine(_selectedInstallation.ApiDirectory, requested.Name + ".dll");
+            if (!File.Exists(path))
                 return null;
 
-            string path = GetAssemblyPath(_selectedEngineeringVersion, requestedVersion, requested.Name);
-            if (string.IsNullOrEmpty(path) || !File.Exists(path))
-                return null;
+            Assembly loaded = Assembly.LoadFrom(path);
+            if (!string.Equals(requested.FullName, loaded.GetName().FullName, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new FileNotFoundException(
+                    "The installed TIA Portal Openness assembly does not match the version requested by this build.",
+                    path);
+            }
 
-            return Assembly.LoadFrom(path);
+            return loaded;
         }
 
-        private static IList<string> GetInstalledEngineeringVersions()
+        private static IList<CompatibleInstallation> FindCompatibleInstallations()
         {
-            var versions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            AssemblyName referencedBase = GetReferencedBaseAssembly();
+            if (referencedBase == null || referencedBase.Version == null)
+                return new List<CompatibleInstallation>();
+
+            string apiVersion = referencedBase.Version.ToString();
+            string baseAssemblyName = referencedBase.Name;
+            var installations = new Dictionary<string, CompatibleInstallation>(StringComparer.OrdinalIgnoreCase);
 
             foreach (RegistryView view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
             {
@@ -88,52 +104,118 @@ namespace SiemensTiaOpenness
                         if (openness == null)
                             continue;
 
-                        foreach (string name in openness.GetSubKeyNames())
-                            versions.Add(name);
+                        foreach (string registryVersion in openness.GetSubKeyNames())
+                        {
+                            using (RegistryKey engineeringKey = openness.OpenSubKey(registryVersion))
+                            {
+                                if (engineeringKey == null)
+                                    continue;
+
+                                string displayVersion = engineeringKey.GetValue("PortalVersion") as string;
+                                if (string.IsNullOrWhiteSpace(displayVersion))
+                                    displayVersion = ToDisplayVersion(registryVersion);
+
+                                string assemblyPath = FindBaseAssemblyPath(
+                                    engineeringKey,
+                                    apiVersion,
+                                    baseAssemblyName);
+
+                                if (string.IsNullOrWhiteSpace(assemblyPath) || !File.Exists(assemblyPath))
+                                    continue;
+
+                                string directory = Path.GetDirectoryName(assemblyPath);
+                                if (string.IsNullOrWhiteSpace(directory))
+                                    continue;
+
+                                var item = new CompatibleInstallation(
+                                    registryVersion,
+                                    NormalizeDisplayVersion(displayVersion),
+                                    directory);
+
+                                installations[item.DisplayVersion] = item;
+                            }
+                        }
                     }
                 }
                 catch
                 {
-                    // A missing registry view should not prevent discovery from the other view.
+                    // A missing or inaccessible registry view should not block discovery from the other view.
                 }
             }
 
-            return versions.ToList();
+            return installations.Values.ToList();
         }
 
-        private static bool HasApiVersion(string engineeringVersion, string apiVersion)
+        private static string FindBaseAssemblyPath(
+            RegistryKey engineeringKey,
+            string apiVersion,
+            string baseAssemblyName)
         {
-            return !string.IsNullOrEmpty(GetAssemblyPath(engineeringVersion, apiVersion, EngineeringAssemblyName));
-        }
-
-        private static string GetAssemblyPath(string engineeringVersion, string apiVersion, string assemblyName)
-        {
-            foreach (RegistryView view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
+            using (RegistryKey publicApi = engineeringKey.OpenSubKey("PublicAPI"))
+            using (RegistryKey apiKey = publicApi == null ? null : publicApi.OpenSubKey(apiVersion))
             {
-                try
+                if (apiKey == null)
+                    return null;
+
+                string direct = apiKey.GetValue(baseAssemblyName) as string;
+                if (!string.IsNullOrWhiteSpace(direct) && File.Exists(direct))
+                    return direct;
+
+                foreach (string framework in new[] { "net48", "net8.0-windows" })
                 {
-                    using (RegistryKey baseKey = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, view))
-                    using (RegistryKey apiKey = baseKey.OpenSubKey(
-                        OpennessRegistryPath + @"\" + engineeringVersion + @"\PublicAPI\" + apiVersion))
+                    using (RegistryKey frameworkKey = apiKey.OpenSubKey(framework))
                     {
-                        if (apiKey == null)
+                        if (frameworkKey == null)
                             continue;
 
-                        string path = apiKey.GetValue(assemblyName) as string;
+                        string path = frameworkKey.GetValue(baseAssemblyName) as string;
                         if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
                             return path;
                     }
-                }
-                catch
-                {
-                    // Continue with the other registry view.
                 }
             }
 
             return null;
         }
 
-        private static Version ParseEngineeringVersion(string value)
+        private static AssemblyName GetReferencedBaseAssembly()
+        {
+            AssemblyName[] references = Assembly.GetExecutingAssembly().GetReferencedAssemblies();
+
+            return references.FirstOrDefault(a =>
+                       string.Equals(a.Name, LegacyBaseAssemblyName, StringComparison.OrdinalIgnoreCase))
+                   ?? references.FirstOrDefault(a =>
+                       string.Equals(a.Name, V21BaseAssemblyName, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static string ToDisplayVersion(string registryVersion)
+        {
+            string value = registryVersion == null ? string.Empty : registryVersion.Trim();
+            Version parsed;
+            if (Version.TryParse(value, out parsed))
+            {
+                if (parsed.Build <= 0 && parsed.Revision <= 0 && parsed.Minor == 0)
+                    return "V" + parsed.Major;
+
+                if (parsed.Build <= 0 && parsed.Revision <= 0)
+                    return "V" + parsed.Major + "." + parsed.Minor;
+            }
+
+            return NormalizeDisplayVersion(value);
+        }
+
+        private static string NormalizeDisplayVersion(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return value;
+
+            string normalized = value.Trim();
+            return normalized.StartsWith("V", StringComparison.OrdinalIgnoreCase)
+                ? "V" + normalized.Substring(1)
+                : "V" + normalized;
+        }
+
+        private static Version ParseVersion(string value)
         {
             if (string.IsNullOrWhiteSpace(value))
                 return new Version(0, 0);
@@ -144,6 +226,20 @@ namespace SiemensTiaOpenness
 
             Version parsed;
             return Version.TryParse(normalized, out parsed) ? parsed : new Version(0, 0);
+        }
+
+        private sealed class CompatibleInstallation
+        {
+            public CompatibleInstallation(string registryVersion, string displayVersion, string apiDirectory)
+            {
+                RegistryVersion = registryVersion;
+                DisplayVersion = displayVersion;
+                ApiDirectory = apiDirectory;
+            }
+
+            public string RegistryVersion { get; private set; }
+            public string DisplayVersion { get; private set; }
+            public string ApiDirectory { get; private set; }
         }
     }
 }
