@@ -1,2 +1,2 @@
 @echo off
-start "" "%~dp0TiaV15_1_HmiScreenTool.sln"
+start "" "%~dp0SiemensTiaOpenness.sln"
