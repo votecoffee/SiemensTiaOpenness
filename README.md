@@ -23,24 +23,24 @@ The Siemens DLL references use `Copy Local = False`; Siemens DLLs are not redist
 
 ## Build
 
-Open `TiaV15_1_HmiScreenTool.sln` and build x64.
+Open `SiemensTiaOpenness.sln` and build x64.
 
 The default compile-time API is V15.1. To build against another installed Openness API, set `TiaPortalVersion`:
 
 ```bat
-msbuild TiaV15_1_HmiScreenTool.sln /p:Configuration=Release /p:TiaPortalVersion=V17
+msbuild SiemensTiaOpenness.sln /p:Configuration=Release /p:TiaPortalVersion=V17
 ```
 
 If the API DLL comes from a newer installed TIA version, also set `TiaPortalInstallVersion`. For example, TIA Portal V20 can provide its retained V17 API:
 
 ```bat
-msbuild TiaV15_1_HmiScreenTool.sln /p:Configuration=Release /p:TiaPortalVersion=V17 /p:TiaPortalInstallVersion=V20
+msbuild SiemensTiaOpenness.sln /p:Configuration=Release /p:TiaPortalVersion=V17 /p:TiaPortalInstallVersion=V20
 ```
 
 You can also point directly at a PublicAPI directory:
 
 ```bat
-msbuild TiaV15_1_HmiScreenTool.sln /p:Configuration=Release /p:TiaPublicApiDir="C:\Program Files\Siemens\Automation\Portal V20\PublicAPI\V17"
+msbuild SiemensTiaOpenness.sln /p:Configuration=Release /p:TiaPublicApiDir="C:\Program Files\Siemens\Automation\Portal V20\PublicAPI\V17"
 ```
 
 The build fails with a clear message if the requested `Siemens.Engineering.dll` or `Siemens.Engineering.Hmi.dll` cannot be found.
