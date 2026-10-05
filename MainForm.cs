@@ -11,7 +11,7 @@ using HmiScreen = Siemens.Engineering.Hmi.Screen.Screen;
 using Siemens.Engineering.HW;
 using Siemens.Engineering.HW.Features;
 
-namespace TiaV15_1_HmiScreenTool
+namespace SiemensTiaOpenness
 {
     public sealed class MainForm : Form
     {
@@ -40,7 +40,7 @@ namespace TiaV15_1_HmiScreenTool
 
         public MainForm()
         {
-            Text = "TIA Portal V15.1 - HMI Tool - Screens Only Build";
+            Text = "TIA Portal " + TiaPortalAssemblyResolver.SelectedEngineeringVersion + " - HMI Export / Import Tool";
             Width = 1220;
             Height = 760;
             MinimumSize = new Size(1050, 620);
@@ -227,7 +227,7 @@ namespace TiaV15_1_HmiScreenTool
                 var selected = _processCombo.SelectedItem as ProcessEntry;
                 if (selected == null)
                 {
-                    MessageBox.Show(this, "Start TIA Portal V15.1, open the project, then click Refresh TIA.", "No TIA instance", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show(this, "Start the selected TIA Portal version, open the project, then click Refresh TIA.", "No TIA instance", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
 
@@ -514,7 +514,7 @@ namespace TiaV15_1_HmiScreenTool
                 Directory.CreateDirectory(root);
 
                 var summary = new List<string>();
-                summary.Add("TIA Portal V15.1 HMI Openness export");
+                summary.Add("TIA Portal " + TiaPortalAssemblyResolver.SelectedEngineeringVersion + " HMI Openness export");
                 summary.Add("Exported: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
                 summary.Add("Project: " + (_project == null ? "" : _projectLabel.Text));
                 summary.Add("HMI: " + GetActiveHmiName());
@@ -859,7 +859,7 @@ namespace TiaV15_1_HmiScreenTool
                     return;
 
                 var summary = new List<string>();
-                summary.Add("TIA Portal V15.1 Complete HMI import");
+                summary.Add("TIA Portal " + TiaPortalAssemblyResolver.SelectedEngineeringVersion + " Complete HMI import");
                 summary.Add("Imported: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
                 summary.Add("Project: " + _projectLabel.Text);
                 summary.Add("HMI: " + GetActiveHmiName());
@@ -891,7 +891,7 @@ namespace TiaV15_1_HmiScreenTool
                     ImportMissingCycles(path);
                 });
 
-                // Tag event handlers in this project call exported VB scripts, so scripts come first.
+                // Tag event handlers may call exported VB scripts, so scripts come first.
                 RunImportCategoryIfPresent("VBScripts", root, summary, ref ok, ref failed, delegate(string path)
                 {
                     ImportVBScriptFolderDynamic((dynamic)_activeHmi.VBScriptFolder, path, options);
@@ -1226,7 +1226,7 @@ namespace TiaV15_1_HmiScreenTool
                     return;
 
                 var summary = new List<string>();
-                summary.Add("TIA Portal V15.1 Screens-Only HMI import");
+                summary.Add("TIA Portal " + TiaPortalAssemblyResolver.SelectedEngineeringVersion + " Screens-Only HMI import");
                 summary.Add("Imported: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
                 summary.Add("Project: " + _projectLabel.Text);
                 summary.Add("HMI: " + GetActiveHmiName());
