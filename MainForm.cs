@@ -897,7 +897,7 @@ namespace SiemensTiaOpenness
                     ImportVBScriptFolderDynamic((dynamic)_activeHmi.VBScriptFolder, path, options);
                 });
 
-                // Tags depend on connection/cycles/scripts. Text lists in this project also contain
+                // Tags can depend on connections, cycles, and scripts. Text lists can also contain
                 // Open Links to HMI tags, so tags must precede text lists.
                 RunImportCategoryIfPresent("TagTables", root, summary, ref ok, ref failed, delegate(string path)
                 {
